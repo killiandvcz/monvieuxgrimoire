@@ -1,0 +1,48 @@
+name: monvieuxgrimoire-dev
+
+services:
+  front:
+    image: node:20-alpine
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./app:/app
+    working_dir: /app
+    command: npm run start
+    networks:
+      - monvieuxgrimoire
+  
+  back:
+    image: oven/bun:latest
+    ports:
+      - "4000:8080"
+    volumes:
+      - ./back:/back
+    working_dir: /back
+    command: bun dev
+    environment:
+      - MONGO_URL=mongodb://db:27017/monvieuxgrimoire
+    networks:
+      - monvieuxgrimoire
+    depends_on:
+      - db
+
+  db:
+    image: mongo:latest
+    ports:
+      - '27017:27017'
+    command:
+      - --storageEngine=wiredTiger
+    volumes:
+      - mongo-data:/data/db
+    logging:
+      driver: none
+    networks:
+      - monvieuxgrimoire
+
+networks:
+  monvieuxgrimoire:
+    driver: bridge
+
+volumes:
+  mongo-data:
