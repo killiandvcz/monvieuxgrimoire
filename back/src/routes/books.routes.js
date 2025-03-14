@@ -7,7 +7,6 @@ import sharp from "sharp";
 import path from "path";
 import { readdir, mkdir } from "node:fs/promises";
 import { deleteImageFile } from "../utils/image.utils";
-import { log } from "node:console";
 
 export const publicBookRouter = express.Router();
 
