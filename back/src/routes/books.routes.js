@@ -6,6 +6,8 @@ import { upload } from "../config/multer.config";
 import sharp from "sharp";
 import path from "path";
 import { readdir, mkdir } from "node:fs/promises";
+import { deleteImageFile } from "../utils/image.utils";
+import { log } from "node:console";
 
 export const publicBookRouter = express.Router();
 
@@ -13,20 +15,6 @@ publicBookRouter.get('/', async (req, res) => {
     const books = await Book.find();
     
     return res.status(200).json([...books]);
-});
-
-publicBookRouter.get('/:id', async (req, res) => {
-    const { id } = req.params;
-    
-    const book = await Book
-    .findById(id);
-    
-    if (!book) return res.status(404).json({
-        success: false,
-        message: "Livre introuvable"
-    });
-    
-    return res.status(200).json(book);
 });
 
 publicBookRouter.get('/bestrating', async (req, res) => {
@@ -44,15 +32,35 @@ publicBookRouter.get('/bestrating', async (req, res) => {
         path: 'userId',
         select: 'name email'
     })
+
+    console.log("BOOKS", books);
+    
     
     return res.status(200).json([...books]);
     
 });
 
+publicBookRouter.get('/:id', async (req, res) => {
+    const { id } = req.params;
+    
+    const book = await Book
+    .findById(id);
+    
+    if (!book) return res.status(404).json({
+        success: false,
+        message: "Livre introuvable"
+    });
+    
+    return res.status(200).json(book);
+});
+
+
+
 
 export const authedBookRouter = express.Router();
 
 publicBookRouter.post('/', authMiddleware(env.JWT_SECRET), upload.single("image"), async (req, res) => {
+    console.log("BOOK");
     
     const data = req.body.book;
     const book = JSON.parse(data);
@@ -68,22 +76,30 @@ publicBookRouter.post('/', authMiddleware(env.JWT_SECRET), upload.single("image"
         await mkdir("uploads");
     }
     
-    await sharp(req.file.buffer).webp({
-        quality: 80
-    }).toFile(filepath);
+    try {
+        await sharp(req.file.buffer).webp({
+            quality: 80
+        }).toFile(filepath);
+        
+        book.imageUrl = `http://localhost:4000/uploads/${filename}`;
+        book.ratings[0].userId = req.user.id;
+        book.userId = req.user.id;
+        
+        console.log("USERID", req.user.id);
+        const newBook = await Book.create({
+            ...book,
+        });
     
-    book.imageUrl = `http://localhost:4000/uploads/${filename}`;
-    book.ratings[0].userId = req.user.id;
-    book.userId = req.user.id;
-    
-    console.log("USERID", req.user.id);
-    const newBook = await Book.create({
-        ...book,
-    });
-
-    newBook.calculateAverageRating();
-    
-    await newBook.save();
+        newBook.calculateAverageRating();
+        
+        await newBook.save();
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({
+            success: false,
+            message: "Erreur lors de la création du livre"
+        });
+    }
     
     return res.status(201).json({
         success: true,
@@ -93,17 +109,27 @@ publicBookRouter.post('/', authMiddleware(env.JWT_SECRET), upload.single("image"
 
 publicBookRouter.put('/:id', authMiddleware(env.JWT_SECRET), upload.single("image"), async (req, res) => {
     const { id } = req.params;
-    console.log("ID", id);
-    console.log("BODY", req.body);
+
+    const existingBook = await Book.findById(id);
+    if (!existingBook) return res.status(404).json({
+        success: false,
+        message: "Livre introuvable"
+    });
+
+    if (existingBook.userId.toString() !== req.user.id) return res.status(403).json({
+        success: false,
+        message: "Vous n'êtes pas autorisé à modifier ce livre"
+    });
     
     const data = req.body.book;
     const book = typeof data === "string" ? JSON.parse(data) : req.body;
-    console.log("BOOK", book);
     
-    
+    let imageUrl = existingBook.imageUrl;
     const image = req.file ? req.file.buffer : null;
     
     if (image) {
+
+        await deleteImageFile(existingBook.imageUrl);
         const filename = crypto.randomUUID() + ".webp";
         const filepath = path.join(__dirname, "../../uploads", filename);
         
@@ -111,14 +137,24 @@ publicBookRouter.put('/:id', authMiddleware(env.JWT_SECRET), upload.single("imag
             quality: 80
         }).toFile(filepath);
         
-        book.imageUrl = `http://localhost:4000/uploads/${filename}`;
+        imageUrl = `http://localhost:4000/uploads/${filename}`;
     }
     
     book.userId = req.user.id;
+    book.imageUrl = imageUrl;
+
+    if (!book.ratings) {
+        book.ratings = existingBook.ratings;
+    }
     
-    await Book.findByIdAndUpdate(id, {
-        ...book 
-    });
+    const updatedBook = await Book.findByIdAndUpdate(id, {
+        ...book
+    }, { new: true });
+    
+    if (updatedBook.isModified('ratings')) {
+        updatedBook.calculateAverageRating();
+        await updatedBook.save();
+    }
     
     return res.status(200).json({
         success: true,
@@ -144,6 +180,9 @@ publicBookRouter.delete('/:id', authMiddleware(env.JWT_SECRET), async (req, res)
         message: "Vous n'êtes pas autorisé à supprimer ce livre"
     });
     
+
+    await deleteImageFile(book.imageUrl);
+
     await Book
     .findByIdAndDelete(id);
     
@@ -181,8 +220,5 @@ console.log("BODY", req.body);
 
     await book.save();
 
-    return res.status(200).json({
-        success: true,
-        message: "Note ajoutée"
-    });
+    return res.status(200).json(book);
 })
