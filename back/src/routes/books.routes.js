@@ -11,9 +11,19 @@ import { deleteImageFile } from "../utils/image.utils";
 export const publicBookRouter = express.Router();
 
 publicBookRouter.get('/', async (req, res) => {
-    const books = await Book.find();
+    try {
+        const books = await Book.find();
+        console.log("BOOKS", books);
+        return res.status(200).json([...books]);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({
+            success: false,
+            message: "Erreur lors de la récupération des livres"
+        });
+    }
     
-    return res.status(200).json([...books]);
+    
 });
 
 publicBookRouter.get('/bestrating', async (req, res) => {
@@ -30,9 +40,7 @@ publicBookRouter.get('/bestrating', async (req, res) => {
     }).limit(3).populate({
         path: 'userId',
         select: 'name email'
-    })
-
-    console.log("BOOKS", books);
+    });
     
     
     return res.status(200).json([...books]);
