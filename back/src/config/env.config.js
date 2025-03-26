@@ -1,6 +1,4 @@
-// src/config/env.config.js
 
-// Valider les variables d'environnement obligatoires au démarrage
 function validateEnv() {
     const requiredEnvVars = ['JWT_SECRET'];
     
@@ -16,7 +14,7 @@ function validateEnv() {
     }
   }
   
-  // Générer une clé secrète aléatoire si elle n'est pas définie (uniquement pour le développement)
+  
   function generateSecretKey(length = 64) {
     if (process.env.NODE_ENV === 'production') return null;
     
@@ -31,10 +29,10 @@ function validateEnv() {
     return result;
   }
   
-  // Valider les variables d'environnement
+  
   validateEnv();
   
-  // Configuration des variables d'environnement
+  
   export const env = {
     NODE_ENV: process.env.NODE_ENV || 'development',
     MONGO_URL: process.env.MONGO_URL || 'mongodb://localhost:27017/monvieuxgrimoire',
@@ -50,7 +48,7 @@ function validateEnv() {
     BASE_URL: process.env.BASE_URL || 'http://localhost:8080',
   };
   
-  // Avertir si une clé JWT faible est utilisée en environnement de production
+  
   if (process.env.NODE_ENV === 'production' && process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) {
     console.warn('⚠️ La clé JWT_SECRET est trop courte pour un environnement de production (min 32 caractères)');
   }
